@@ -1,21 +1,21 @@
 import time
-import google.generativeai as genai
+from google import genai
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from backend.config import GOOGLE_API_KEY, GEMINI_MODEL_NAME
 from backend.retriever import get_retriever
 from backend.ingest import ingest_documents
-import google.api_core.exceptions
 
 # Initialize FastAPI
 app = FastAPI(title="SEC RAG API")
 
-# Initialize Gemini
+# Initialize Gemini Client
+client = None
 if not GOOGLE_API_KEY or "your_google_ai_studio" in GOOGLE_API_KEY:
     print("WARNING: GOOGLE_API_KEY is not set correctly in .env")
 else:
-    genai.configure(api_key=GOOGLE_API_KEY)
+    client = genai.Client(api_key=GOOGLE_API_KEY)
 
 class QueryRequest(BaseModel):
     question: str
@@ -48,6 +48,9 @@ async def ingest():
 
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest):
+    if client is None:
+        raise HTTPException(status_code=500, detail="Gemini client not initialized. Check your GOOGLE_API_KEY.")
+
     retriever = get_retriever()
     
     # 1. Retrieve chunks
@@ -79,21 +82,26 @@ Question: {request.question}
 
 Answer:"""
 
-    model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-    
     # Retry logic for rate limiting
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=GEMINI_MODEL_NAME,
+                contents=prompt
+            )
             return QueryResponse(answer=response.text, sources=sources)
-        except google.api_core.exceptions.ResourceExhausted:
-            if attempt < max_retries - 1:
-                print(f"Rate limit exceeded. Retrying in 1s... (Attempt {attempt+1})")
-                time.sleep(1)
-            else:
-                raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded. Please try again later.")
         except Exception as e:
+            # Check for rate limit error (429)
+            error_msg = str(e).lower()
+            if "429" in error_msg or "resource_exhausted" in error_msg:
+                if attempt < max_retries - 1:
+                    print(f"Rate limit exceeded. Retrying in 1s... (Attempt {attempt+1})")
+                    time.sleep(1)
+                    continue
+                else:
+                    raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded. Please try again later.")
+            
             print(f"Gemini API Error: {e}")
             raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
 
