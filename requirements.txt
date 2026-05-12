@@ -4,6 +4,8 @@ streamlit
 chromadb
 sentence-transformers
 google-genai
+langfuse
+openinference-instrumentation-google-genai
 python-dotenv
 pdfplumber
 requests

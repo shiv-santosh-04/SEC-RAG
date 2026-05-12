@@ -6,6 +6,11 @@ from typing import List, Optional
 from backend.config import GOOGLE_API_KEY, GEMINI_MODEL_NAME
 from backend.retriever import get_retriever
 from backend.ingest import ingest_documents
+from langfuse import observe
+from openinference.instrumentation.google_genai import GoogleGenAIInstrumentor
+
+# Initialize Langfuse Instrumentation for Google GenAI
+GoogleGenAIInstrumentor().instrument()
 
 # Initialize FastAPI
 app = FastAPI(title="SEC RAG API")
@@ -35,6 +40,7 @@ async def startup_event():
     get_retriever()
 
 @app.post("/ingest")
+@observe()
 async def ingest():
     try:
         docs, chunks = ingest_documents()
@@ -47,6 +53,7 @@ async def ingest():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/query", response_model=QueryResponse)
+@observe()
 async def query(request: QueryRequest):
     if client is None:
         raise HTTPException(status_code=500, detail="Gemini client not initialized. Check your GOOGLE_API_KEY.")
