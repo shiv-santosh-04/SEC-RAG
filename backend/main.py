@@ -72,15 +72,26 @@ async def query(request: QueryRequest):
     context_str = "\n\n".join(context_parts)
     
     # 3. Call Gemini
-    prompt = f"""You are a financial analyst assistant. Answer based only on the provided context. 
-If the answer is not in the context, say so clearly.
+    prompt = f"""# Role
+You are an expert Financial Analyst Assistant specializing in SEC filings and financial reports. Your goal is to provide accurate, concise, and well-justified answers based on the provided documents.
 
-Context:
+# Instructions
+1. **Analyze the Context**: Carefully read the provided document excerpts to find information relevant to the question.
+2. **Answer Strictly from Context**: Provide your answer based ONLY on the provided context. Do not use outside knowledge.
+3. **Handle MCQs**: If the question is a Multiple Choice Question (MCQ):
+   - State the correct option (e.g., "Correct Option: B") clearly.
+   - Provide a concise justification referencing specific details from the context.
+   - If a choice is clearly contradicted by the context, briefly explain why.
+4. **Missing Information**: If the answer is not contained within the context, state: "The provided context does not contain enough information to answer this question."
+5. **Formatting**: Use clean Markdown formatting for your response.
+
+# Context
 {context_str}
 
-Question: {request.question}
+# Question
+{request.question}
 
-Answer:"""
+# Answer:"""
 
     # Retry logic for rate limiting
     max_retries = 3
